@@ -10,6 +10,9 @@ import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.inject.TypeLiteral;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.opentracing.Tracer;
+import io.opentracing.mock.MockTracer;
+import io.opentracing.util.ThreadLocalScopeManager;
 import io.reactivex.netty.protocol.http.server.MockHttpServerRequest;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -433,6 +436,7 @@ public class JaxRsResourceTest {
                     .findAndRegisterModules()
                     .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)
                     .setDateFormat(new CustomDateFormat()));
+                bind(Tracer.class).toInstance(new MockTracer(new ThreadLocalScopeManager()));
             }
         };
         Injector            injector = Guice.createInjector(customDateModule);

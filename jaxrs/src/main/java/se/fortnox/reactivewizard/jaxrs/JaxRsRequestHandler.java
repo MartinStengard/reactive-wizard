@@ -1,13 +1,13 @@
 package se.fortnox.reactivewizard.jaxrs;
 
 import io.netty.buffer.ByteBuf;
+import io.opentracing.Scope;
 import io.opentracing.Tracer;
-import io.opentracing.rxjava.TracingObserverSubscriber;
+import io.opentracing.rxjava.TracingActionSubscriber;
 import io.reactivex.netty.protocol.http.server.HttpServerRequest;
 import io.reactivex.netty.protocol.http.server.HttpServerResponse;
 import io.reactivex.netty.protocol.http.server.RequestHandler;
 import rx.Observable;
-import rx.Observer;
 import se.fortnox.reactivewizard.ExceptionHandler;
 import se.fortnox.reactivewizard.jaxrs.response.JaxRsResult;
 import se.fortnox.reactivewizard.util.DebugUtil;
@@ -22,28 +22,10 @@ import javax.inject.Singleton;
 public class JaxRsRequestHandler implements RequestHandler<ByteBuf, ByteBuf> {
 
     private Tracer tracer;
-    private JaxRsResources resources;
+    private JaxRsResources   resources;
 
     private ExceptionHandler exceptionHandler;
 
-    private static <T> Observer<T> observer(final Tracer tracer) {
-        return new Observer<T>() {
-            @Override
-            public void onCompleted() {
-                tracer.scopeManager().active().span().setTag("thread", Thread.currentThread().getName());
-            }
-
-            @Override
-            public void onError(Throwable e) {
-                // Noop
-            }
-
-            @Override
-            public void onNext(T t) {
-                // Noop
-            }
-        };
-    }
     @Inject
     public JaxRsRequestHandler(JaxRsResourcesProvider services,
         JaxRsResourceFactory jaxRsResourceFactory,
@@ -54,7 +36,8 @@ public class JaxRsRequestHandler implements RequestHandler<ByteBuf, ByteBuf> {
             jaxRsResourceFactory,
             exceptionHandler,
             null,
-            tracer);
+            tracer
+        );
     }
 
     public JaxRsRequestHandler(Object... services) {
@@ -71,14 +54,14 @@ public class JaxRsRequestHandler implements RequestHandler<ByteBuf, ByteBuf> {
         if (classReloading == null) {
             classReloading = DebugUtil.IS_DEBUG;
         }
-        this.resources = new JaxRsResources(services, jaxRsResourceFactory, classReloading);
         this.tracer = tracer;
+        this.resources = new JaxRsResources(services, jaxRsResourceFactory, classReloading);
     }
 
     /**
      * Handles incoming request if a matching resource is found.
      *
-     * @param request The incoming request
+     * @param request  The incoming request
      * @param response The response that will be sent
      * @return an Observable which will complete the request when subsribed, or null if no resource matches the request.
      */
@@ -93,20 +76,41 @@ public class JaxRsRequestHandler implements RequestHandler<ByteBuf, ByteBuf> {
 
         long requestStartTime = System.currentTimeMillis();
 
-        Observable<? extends JaxRsResult<?>> jaxRsResultObservable = resource.call(jaxRsRequest)
-                .singleOrDefault(null)
-                .cache();
-
-        Observer<JaxRsResult> observer = observer(tracer);
-        TracingObserverSubscriber<JaxRsResult> tracingObserverSubscriber =
-                new TracingObserverSubscriber<>(observer, "JaxRsRequestHandler#handle", tracer);
-
-        jaxRsResultObservable.subscribe(tracingObserverSubscriber);
-
-        return jaxRsResultObservable
+        Observable<Void> resouceInvoicationObservable = resource.call(jaxRsRequest)
+            .singleOrDefault(null)
             .flatMap(result -> writeResult(response, result))
+            .cache();
+
+        if (tracer != null) {
+            TracingActionSubscriber<Void> tracingActionSubscriber = new TracingActionSubscriber<>(
+                aVoid -> {
+                    logForActiveSpan(tracer, "Great success: " + response.getStatus());
+                },
+                throwable -> {
+                    if (throwable instanceof WebException) {
+                        logForActiveSpan(tracer, "Not so great success: " + ((WebException)throwable).getError());
+                    } else {
+                        logForActiveSpan(tracer, "Not so great success: " + throwable.getCause());
+                    }
+
+                },
+                "JaxRsRequestHandler#handle",
+                tracer
+            );
+            resouceInvoicationObservable.subscribe(tracingActionSubscriber);
+        }
+
+        return resouceInvoicationObservable
             .onErrorResumeNext(e -> exceptionHandler.handleException(request, response, e))
             .doAfterTerminate(() -> resource.log(request, response, requestStartTime));
+
+    }
+
+    private void logForActiveSpan(final Tracer tracer, final String message) {
+        Scope active = tracer.scopeManager().active();
+        if (active != null) {
+            active.span().log("stuff");
+        }
     }
 
     private Observable<Void> writeResult(HttpServerResponse<ByteBuf> response, JaxRsResult<?> result) {

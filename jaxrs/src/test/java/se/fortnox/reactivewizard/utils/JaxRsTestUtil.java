@@ -1,5 +1,8 @@
 package se.fortnox.reactivewizard.utils;
 
+import io.opentracing.Tracer;
+import io.opentracing.mock.MockTracer;
+import io.opentracing.util.ThreadLocalScopeManager;
 import se.fortnox.reactivewizard.ExceptionHandler;
 import se.fortnox.reactivewizard.jaxrs.BlockingResourceScheduler;
 import se.fortnox.reactivewizard.jaxrs.JaxRsRequestHandler;
@@ -77,11 +80,21 @@ public class JaxRsTestUtil {
         return processRequestWithHandler(handler, request);
     }
 
+    private static JaxRsRequestHandler getJaxRsRequestHandler(Tracer tracer, Object... services) {
+        return new JaxRsRequestHandler(services,
+            new JaxRsResourceFactory(new ParamResolverFactories(), new JaxRsResultFactoryFactory(), new BlockingResourceScheduler()),
+            new ExceptionHandler(),
+            false,
+            tracer
+        );
+    }
+
     private static JaxRsRequestHandler getJaxRsRequestHandler(Object... services) {
         return new JaxRsRequestHandler(services,
             new JaxRsResourceFactory(new ParamResolverFactories(), new JaxRsResultFactoryFactory(), new BlockingResourceScheduler()),
             new ExceptionHandler(),
-            false);
+            false,
+            new MockTracer(new ThreadLocalScopeManager()));
     }
 
     public static MockHttpServerResponse processRequestWithHandler(JaxRsRequestHandler handler, HttpServerRequest<ByteBuf> request) {
@@ -101,6 +114,10 @@ public class JaxRsTestUtil {
 
     public static String body(MockHttpServerResponse response) {
         return response.getOutp();
+    }
+
+    public static TestServer testServer(Tracer tracer, Object... services) {
+        return new TestServer(getJaxRsRequestHandler(tracer, services));
     }
 
     public static TestServer testServer(Object... services) {

@@ -3,6 +3,8 @@ package se.fortnox.reactivewizard.jaxrs;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.opentracing.mock.MockTracer;
+import io.opentracing.util.ThreadLocalScopeManager;
 import io.reactivex.netty.protocol.http.server.HttpServerRequest;
 import io.reactivex.netty.protocol.http.server.MockHttpServerRequest;
 import org.junit.Test;
@@ -26,7 +28,9 @@ public class StatusTest {
     JaxRsRequestHandler handler          = new JaxRsRequestHandler(new Object[]{new TestresourceImpl()},
         new JaxRsResourceFactory(),
         exceptionHandler,
-        false);
+        false,
+        new MockTracer(new ThreadLocalScopeManager())
+    );
 
     @Test
     public void shouldReturn200ForGetPutPatch() {

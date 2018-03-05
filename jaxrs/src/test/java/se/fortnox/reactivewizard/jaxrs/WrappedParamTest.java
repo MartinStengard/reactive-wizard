@@ -1,5 +1,7 @@
 package se.fortnox.reactivewizard.jaxrs;
 
+import io.opentracing.mock.MockTracer;
+import io.opentracing.util.ThreadLocalScopeManager;
 import se.fortnox.reactivewizard.ExceptionHandler;
 import se.fortnox.reactivewizard.mocks.MockHttpServerResponse;
 import io.netty.handler.codec.http.HttpMethod;
@@ -60,7 +62,9 @@ public class WrappedParamTest {
         return new JaxRsRequestHandler(new Object[]{service},
             new JaxRsResourceFactory(),
             new ExceptionHandler(),
-            false);
+            false,
+            new MockTracer(new ThreadLocalScopeManager())
+        );
     }
 
     @Path("")

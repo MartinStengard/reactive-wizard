@@ -1,5 +1,7 @@
 package se.fortnox.reactivewizard.jaxrs;
 
+import io.opentracing.mock.MockTracer;
+import io.opentracing.util.ThreadLocalScopeManager;
 import io.reactivex.netty.protocol.http.server.RequestHandler;
 import org.junit.Test;
 import rx.Scheduler;
@@ -32,7 +34,8 @@ public class SynchronousResourcesTest {
             new Object[]{new TestRes()},
             new JaxRsResourceFactory(new ParamResolverFactories(), new JaxRsResultFactoryFactory(), new BlockingResourceScheduler(scheduler)),
             new ExceptionHandler(),
-            false);
+            false,
+            new MockTracer(new ThreadLocalScopeManager()));
         JaxRsTestUtil.TestServer testServer = new JaxRsTestUtil.TestServer(handler);
         assertThat(testServer.get("/threadname"))
             .isEqualTo("\"customthread\"");

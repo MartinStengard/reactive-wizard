@@ -23,6 +23,7 @@ public class Main {
         Configuration config = new Configuration(service, samplerConfig, reporterConfig);
         return (com.uber.jaeger.Tracer) config.getTracer();
     }
+    
     public static void main(String[] args) {
         if (args.length == 0) {
             System.out.println("Usage: java -jar app.jar config.yml");
